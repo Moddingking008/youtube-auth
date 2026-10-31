@@ -3,9 +3,27 @@ const { google } = require("googleapis");
 module.exports = async (req, res) => {
   try {
     const code = req.query.code;
+    const state = req.query.state;
 
-    if (!code) {
-      return res.status(400).send("Authorization code missing.");
+    if (!code || !state) {
+      return res.status(400).send("Invalid authorization request.");
+    }
+
+    // Telegram user ID recover
+    let stateData;
+
+    try {
+      stateData = JSON.parse(
+        Buffer.from(state, "base64url").toString("utf8")
+      );
+    } catch (e) {
+      return res.status(400).send("Invalid state.");
+    }
+
+    const telegramId = stateData.telegram_id;
+
+    if (!telegramId) {
+      return res.status(400).send("Telegram user ID missing.");
     }
 
     const oauth2Client = new google.auth.OAuth2(
@@ -14,8 +32,8 @@ module.exports = async (req, res) => {
       process.env.GOOGLE_REDIRECT_URI
     );
 
-    // Google se access token lena
     const { tokens } = await oauth2Client.getToken(code);
+
     oauth2Client.setCredentials(tokens);
 
     const youtube = google.youtube({
@@ -23,7 +41,7 @@ module.exports = async (req, res) => {
       auth: oauth2Client
     });
 
-    // @modskaadda ka channel ID
+    // MODS KA ADDA channel
     const channelResult = await youtube.channels.list({
       part: "id",
       forHandle: "@modskaadda"
@@ -38,37 +56,38 @@ module.exports = async (req, res) => {
 
     const targetChannelId = channelResult.data.items[0].id;
 
-    // User ki subscriptions check
+    // Check user's YouTube subscriptions
     const subResult = await youtube.subscriptions.list({
       part: "snippet",
       mine: true,
       maxResults: 50
     });
 
-    const subscribed =
-      (subResult.data.items || []).some(
-        item =>
-          item.snippet &&
-          item.snippet.resourceId &&
-          item.snippet.resourceId.channelId === targetChannelId
-      );
+    const subscribed = (subResult.data.items || []).some(
+      item =>
+        item.snippet &&
+        item.snippet.resourceId &&
+        item.snippet.resourceId.channelId === targetChannelId
+    );
 
     if (!subscribed) {
       return res.send(`
         <html>
           <body style="font-family:Arial;text-align:center;padding:40px">
-            <h2>❌ YouTube Subscription Not Found</h2>
-            <p>Please subscribe to @modskaadda and try verification again.</p>
+            <h2>❌ YouTube Subscription Required</h2>
+            <p>Please subscribe to @modskaadda.</p>
+            <p>Then return to Telegram and press Verify Now again.</p>
           </body>
         </html>
       `);
     }
 
+    // Successful verification
     return res.send(`
       <html>
         <body style="font-family:Arial;text-align:center;padding:40px">
           <h2>✅ YouTube Verified</h2>
-          <p>Your subscription has been verified successfully.</p>
+          <p>Your YouTube subscription has been verified.</p>
           <p>You can return to Telegram now.</p>
         </body>
       </html>
