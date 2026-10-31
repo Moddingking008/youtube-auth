@@ -9,7 +9,6 @@ module.exports = async (req, res) => {
       return res.status(400).send("Invalid authorization request.");
     }
 
-    // Telegram user ID recover
     let stateData;
 
     try {
@@ -33,7 +32,6 @@ module.exports = async (req, res) => {
     );
 
     const { tokens } = await oauth2Client.getToken(code);
-
     oauth2Client.setCredentials(tokens);
 
     const youtube = google.youtube({
@@ -41,7 +39,6 @@ module.exports = async (req, res) => {
       auth: oauth2Client
     });
 
-    // MODS KA ADDA channel
     const channelResult = await youtube.channels.list({
       part: "id",
       forHandle: "@modskaadda"
@@ -56,7 +53,6 @@ module.exports = async (req, res) => {
 
     const targetChannelId = channelResult.data.items[0].id;
 
-    // Check user's YouTube subscriptions
     const subResult = await youtube.subscriptions.list({
       part: "snippet",
       mine: true,
@@ -75,20 +71,59 @@ module.exports = async (req, res) => {
         <html>
           <body style="font-family:Arial;text-align:center;padding:40px">
             <h2>❌ YouTube Subscription Required</h2>
-            <p>Please subscribe to @modskaadda.</p>
-            <p>Then return to Telegram and press Verify Now again.</p>
+            <p>Please subscribe to @modskaadda first.</p>
+            <p>Then come back and try again.</p>
           </body>
         </html>
       `);
     }
 
-    // Successful verification
+    // YouTube verified successfully
+    // Send verification button back to Telegram
+    const telegramApi =
+      "https://api.telegram.org/bot" +
+      process.env.BOT_TOKEN +
+      "/sendMessage";
+
+    const tgResponse = await fetch(telegramApi, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        chat_id: telegramId,
+        text:
+          "<b>╭━━━〔 ✅ YOUTUBE VERIFIED 〕━━━╮</b>\n" +
+          "<b>┃</b>\n" +
+          "<b>┃  YouTube subscription verified successfully.</b>\n" +
+          "<b>┃</b>\n" +
+          "<b>┃  अब नीचे Verify Now दबाओ.</b>\n" +
+          "<b>┃</b>\n" +
+          "<b>╰━━━━━━━━━━━━━━━━━━━━━━━━╯</b>",
+        parse_mode: "HTML",
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: "I Joined — Verify Now",
+                callback_data: "/yt_verified"
+              }
+            ]
+          ]
+        }
+      })
+    });
+
+    if (!tgResponse.ok) {
+      throw new Error("Telegram message failed.");
+    }
+
     return res.send(`
       <html>
         <body style="font-family:Arial;text-align:center;padding:40px">
           <h2>✅ YouTube Verified</h2>
-          <p>Your YouTube subscription has been verified.</p>
-          <p>You can return to Telegram now.</p>
+          <p>Verification successful.</p>
+          <p>Return to Telegram and press Verify Now.</p>
         </body>
       </html>
     `);
